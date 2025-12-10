@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// TODO: Next step → match detection
+
 public class Board : MonoBehaviour
 {
     [Header("BoardDimensions")]
