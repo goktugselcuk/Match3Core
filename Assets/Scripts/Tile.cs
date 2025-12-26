@@ -11,11 +11,14 @@ public class Tile : MonoBehaviour
 
     SpriteRenderer sr;
 
-    public void Init(int x, int y, int typeID)
+    private Board board;
+
+    public void Init(int x, int y, int typeID,Board  board)
     {
         this.x = x;
         this.y = y;
         this.typeID = typeID;
+        this.board = board;
         name = $"Tile_{x}_{y}";
     }
 
@@ -34,6 +37,13 @@ public class Tile : MonoBehaviour
     void Update()
     {
         
+    }
+
+    private void OnMouseDown()
+    {
+        SetDim(true);
+        board.OnTileClicked(this);
+        Debug.Log($"{this.name} is clicked");
     }
 
     public void SetColor(Color c)
