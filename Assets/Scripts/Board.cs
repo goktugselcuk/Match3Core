@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-// TODO: Next step → match detection
+
 
 public class Board : MonoBehaviour
 {
@@ -30,7 +30,18 @@ public class Board : MonoBehaviour
     bool playerInputLock = false; // to limit selected tiles (max 2)
 
     int swapSpeed = 5;
-        
+
+
+    [Header("TouchInput")]
+
+    private float swipeThreshold = 30f;
+
+    [SerializeField] private LayerMask tileLayer;
+    private Vector2 pressedPos;
+    private Tile pressedTile;
+    private bool isSwipeDone;
+
+    
     // Start is called before the first frame update
     void Start()
     {
@@ -253,6 +264,7 @@ public class Board : MonoBehaviour
     {
         if (!playerInputLock)
         {
+            tile.SetDim(true);
             if (selectedTileA == null)
             {
                 selectedTileA = tile;
@@ -328,7 +340,8 @@ public class Board : MonoBehaviour
 
         yield return AnimateTileSwap(selectedTileA, selectedTileB, targetA, targetB);
 
-        if (FindAllMatches().Count > 0)
+
+        if (LocalSwapMatchCheck(selectedTileA,selectedTileB))
         {
             yield return BoardResolver();
         }
@@ -336,8 +349,21 @@ public class Board : MonoBehaviour
         else
         {
             yield return AnimateTileSwap(selectedTileA, selectedTileB, tileA_originalPos, tileB_originalPos);
+            
             LogicSwapHelper(selectedTileA, selectedTileB);
         }
+
+        if (selectedTileA!=null)
+        {
+            selectedTileA.SetDim(false);
+        }
+
+        if (selectedTileB!= null)
+        {
+            selectedTileB.SetDim(false);
+        }
+
+      
 
         selectedTileA = null;
         selectedTileB = null;
@@ -370,9 +396,212 @@ public class Board : MonoBehaviour
         tileB.y = tempY;
     }
 
+    private Tile TileFromScreenPos(Vector2 pressedPos)
+    {
+        Vector3 worldPos = Camera.main.ScreenToWorldPoint(pressedPos);  // convert the clicked screen position to actual unity world position.
+
+        Collider2D hit = Physics2D.OverlapPoint(worldPos, tileLayer);            //  hit test using colliders
+
+        if (hit==null)
+        {
+            return null;
+        }
+
+        return hit.GetComponent<Tile>();      // return the tile if hit happens
+
+    }
+
+    private void SwipeConnecter(Tile startTile, Vector2 delta) // connect the swipe motion from starting tile to target tile and start the swap
+    {
+        int directionX = 0;
+        int directionY = 0;
+
+        if (Mathf.Abs(delta.y) > Mathf.Abs(delta.x))
+        {
+            directionY = delta.y > 0 ? 1 : -1;
+        }
+
+        else
+        {
+            directionX = delta.x > 0 ? 1 : -1;
+        }
+
+        int targetX = startTile.x + directionX;
+        int targetY = startTile.y + directionY;
+
+        if (targetX < 0 || targetX >= width || targetY < 0 || targetY >= height) //board boundary check
+        {
+            return;
+
+        }
+
+        Tile targetedNeighbor = tiles[targetX, targetY];
+
+        if (targetedNeighbor == null) return;
+
+        selectedTileA = startTile;
+        selectedTileB = targetedNeighbor;
+
+        SwapTiles();
+
+    }
+
+    private void TouchInputHandler(Touch touch)
+    {
+        if(touch.phase == TouchPhase.Began)
+        {
+            pressedPos = touch.position;
+            pressedTile = TileFromScreenPos(pressedPos);
+            isSwipeDone = false;
+            return;
+        }
+
+        if(touch.phase  == TouchPhase.Moved)
+        {
+            if (pressedTile == null) return;
+            if (isSwipeDone) return;
+
+            Vector2 deltaPos = touch.position - pressedPos;
+
+            if (deltaPos.magnitude < swipeThreshold) return;
+
+            SwipeConnecter(pressedTile, deltaPos);
+
+            isSwipeDone = true; // allow only one swipe per touch
+            return;
+        }
+
+        if( touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+        {
+            pressedTile = null;    // reset selected tile
+            isSwipeDone = false; // reset this to allow future swipes
+            return;
+        }
+    }
+
+    private void HandleMouse()
+    {
+        if (Input.GetMouseButtonDown(0))
+        {
+            pressedPos = Input.mousePosition;
+            pressedTile = TileFromScreenPos(pressedPos);
+            isSwipeDone = false;
+        }
+
+        if (Input.GetMouseButton(0))
+        {
+            if (pressedTile == null) return;
+            if (isSwipeDone) return;
+
+            Vector2 delta = (Vector2)Input.mousePosition - pressedPos;
+            if (delta.magnitude < swipeThreshold) return;
+
+            SwipeConnecter(pressedTile, delta);
+            isSwipeDone = true;
+        }
+
+        if (Input.GetMouseButtonUp(0))
+        {
+            pressedTile = null;
+            isSwipeDone = false;
+        }
+    }
+
+    private bool InboundCheck(int x , int y)
+    {
+        if(x<0 || x>=width || y<0 || y >= height) { return false; }
+        else { return true; }
+    }
+
+    private List<Tile> DirectionalMatchChecker(Tile startTile, int dx , int dy)
+    {
+        List<Tile> collectedTiles = new List<Tile>();
+        if (startTile != null)
+        {
+
+            int targetType = startTile.typeID;
+
+            int currentX = startTile.x + dx; // dx and dy help us to give a direction to this search (1,0) means right (0,-1) means down
+            int currentY = startTile.y + dy;
+
+
+            // if it's still inside board, not null and same color. go on
+            while (InboundCheck(currentX, currentY) && tiles[currentX, currentY] != null && tiles[currentX, currentY].typeID == targetType) 
+            {
+                collectedTiles.Add(tiles[currentX, currentY]);
+                currentX += dx;
+                currentY += dy;
+
+            }
+
+        }
+
+        return collectedTiles;
+        
+    }
+
+    private HashSet<Tile> FourWayMatchCollecter(Tile centerTile)
+    {
+        HashSet<Tile> collectedMatchingTiles = new HashSet<Tile>();
+
+        if (centerTile != null) // null check
+        {
+            // horizontal line check //////
+
+            List<Tile> tilesOnLeft = DirectionalMatchChecker(centerTile, -1, 0); // go left starting from center tile. until it's broken with a different colored tile.
+            List<Tile> tilesOnRight = DirectionalMatchChecker(centerTile, 1, 0); // go right starting from center tile. until it's broken with a different colored tile.
+
+            if (1 + tilesOnLeft.Count + tilesOnRight.Count >= 3) // if center tile + streak on left + streak on right equal or greater than 3 it is a match
+            {
+                collectedMatchingTiles.UnionWith(tilesOnLeft); // add tiles on right that form a match
+
+                collectedMatchingTiles.Add(centerTile); // add center tile
+
+                collectedMatchingTiles.UnionWith(tilesOnRight); // add tiles on left that form a match
+            }
+
+            // vertical line  check //////
+
+            List<Tile> tilesOnUp = DirectionalMatchChecker(centerTile, 0, 1);  // go up starting from center tile. until it's broken with a different colored tile.
+            List<Tile> tilesOnDown = DirectionalMatchChecker(centerTile, 0, -1);   // go down starting from center tile. until it's broken with a different colored tile.
+
+            if (1 + tilesOnUp.Count + tilesOnDown.Count >= 3) // if center tile + streak upward + streak downward equal or greater than 3 it is a match
+            {
+                collectedMatchingTiles.UnionWith(tilesOnDown); // add tiles above that form a match
+
+                collectedMatchingTiles.Add(centerTile);
+
+                collectedMatchingTiles.UnionWith(tilesOnUp); // add tiles below that form a match
+            }
+
+
+        }
+
+        return collectedMatchingTiles;
+
+    }
+
+    private bool LocalSwapMatchCheck(Tile tileA , Tile tileB)
+    {
+        HashSet<Tile> matchesOfA = FourWayMatchCollecter(tileA); //matches occured by first tiles' position change
+        HashSet<Tile> matchesOfB = FourWayMatchCollecter(tileB);  //matches occured by second tiles' position change
+
+        matchesOfA.UnionWith(matchesOfB); // merge those 2 hashsets for total matches occured.
+
+        return matchesOfA.Count > 0; // if there is any match from any of the tiles, it's a valid swap
+       
+    }
+
     // Update is called once per frame
     void Update()
     {
-        
+        if (playerInputLock) return;
+
+        if (Input.touchCount > 0)
+        {
+            TouchInputHandler(Input.GetTouch(0));
+        }
+
+        else { HandleMouse(); }
     }
 }

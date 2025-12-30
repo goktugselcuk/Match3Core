@@ -38,13 +38,14 @@ public class Tile : MonoBehaviour
     {
         
     }
-
+    /*
     private void OnMouseDown()
     {
         SetDim(true);
         board.OnTileClicked(this);
         Debug.Log($"{this.name} is clicked");
     }
+    */
 
     public void SetColor(Color c)
     {
@@ -54,7 +55,7 @@ public class Tile : MonoBehaviour
     public void SetDim(bool dim)
     {
         var c = GetComponent<SpriteRenderer>().color;
-        c.a = dim ? 0.35f : 1f;
+        c.a = dim ? 0.33f : 1f;
         GetComponent<SpriteRenderer>().color = c;
     }
 }

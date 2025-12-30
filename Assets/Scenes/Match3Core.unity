@@ -253,6 +253,9 @@ MonoBehaviour:
   - {r: 0.033675194, g: 0, b: 1, a: 1}
   - {r: 0.21016872, g: 1, b: 0, a: 1}
   - {r: 0.95149136, g: 1, b: 0, a: 1}
+  tileLayer:
+    serializedVersion: 2
+    m_Bits: 64
 --- !u!4 &1148986281
 Transform:
   m_ObjectHideFlags: 0
